@@ -225,7 +225,7 @@ admin_password = st.sidebar.text_input(
     type="password"
 )
 
-if admin_password == "admin123":
+if admin_password == "myadminpane123":
 
     st.sidebar.success(
         "Admin Access Granted"
