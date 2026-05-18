@@ -1,0 +1,15 @@
+streamlit
+pandas
+numpy
+scikit-learn
+nltk
+matplotlib
+seaborn
+wordcloud
+joblib
+newspaper3k
+lxml_html_clean
+easyocr
+torch
+torchvision
+pillow
