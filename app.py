@@ -8,7 +8,8 @@ import easyocr
 import os
 
 from PIL import Image
-from newspaper import Article
+import requests
+from bs4 import BeautifulSoup
 
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -166,15 +167,26 @@ def lemmatize_text(text):
 # ==================================================
 
 def extract_news_from_url(url):
+    headers={
+        "User-Agent":
+        "Mozilla/5.0"
+    }
+    response=requests.get(
+        url,
+        headers=headers,
+        timeout=10
+    )
+    soup = BeautifulSoup(
+        response.text,
+        "html.parser"
+    )
+    paragraphs = soup.find_all("p")
+    article_text = " ".join(
 
-    article = Article(url)
+        [p.get_text() for p in paragraphs]
 
-    article.download()
-
-    article.parse()
-
-    return article.text
-
+    )
+    return article_text
 # ==================================================
 # OCR FROM IMAGE
 # ==================================================
@@ -225,7 +237,7 @@ admin_password = st.sidebar.text_input(
     type="password"
 )
 
-if admin_password == "myadminpane123":
+if admin_password == "myadminpanel123":
 
     st.sidebar.success(
         "Admin Access Granted"

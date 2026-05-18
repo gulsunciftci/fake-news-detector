@@ -13,3 +13,5 @@ easyocr
 torch
 torchvision
 pillow
+beautifulsoup4
+requests
