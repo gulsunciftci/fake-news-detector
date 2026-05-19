@@ -15,3 +15,5 @@ torchvision
 pillow
 beautifulsoup4
 requests
+firebase-admin
+pyrebase4

@@ -6,16 +6,24 @@ import nltk
 import numpy as np
 import easyocr
 import os
+import requests
+import pyrebase
+import firebase_admin
 
 from PIL import Image
-import requests
-from bs4 import BeautifulSoup
+from newspaper import Article
+from newspaper.article import ArticleException
 
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
+from firebase_admin import credentials
+from firebase_admin import firestore
+
+from datetime import datetime
+
 # ==================================================
-# DOWNLOAD NLTK DATA
+# NLTK
 # ==================================================
 
 nltk.download("stopwords")
@@ -32,6 +40,93 @@ st.set_page_config(
 )
 
 # ==================================================
+# FIREBASE CONFIG
+# ==================================================
+
+firebase_config = {
+
+    "apiKey":
+    st.secrets["firebase"]["apiKey"],
+
+    "authDomain":
+    st.secrets["firebase"]["authDomain"],
+
+    "projectId":
+    st.secrets["firebase"]["projectId"],
+
+    "storageBucket":
+    st.secrets["firebase"]["storageBucket"],
+
+    "messagingSenderId":
+    st.secrets["firebase"]["messagingSenderId"],
+
+    "appId":
+    st.secrets["firebase"]["appId"],
+
+    "databaseURL":
+    ""
+
+}
+
+firebase = pyrebase.initialize_app(
+    firebase_config
+)
+
+auth = firebase.auth()
+
+# ==================================================
+# FIREBASE ADMIN
+# ==================================================
+
+if not firebase_admin._apps:
+
+    cred = credentials.Certificate({
+
+        "type":
+        st.secrets["firebase_service_account"]["type"],
+
+        "project_id":
+        st.secrets["firebase_service_account"]["project_id"],
+
+        "private_key_id":
+        st.secrets["firebase_service_account"]["private_key_id"],
+
+        "private_key":
+        st.secrets["firebase_service_account"]["private_key"],
+
+        "client_email":
+        st.secrets["firebase_service_account"]["client_email"],
+
+        "client_id":
+        st.secrets["firebase_service_account"]["client_id"],
+
+        "auth_uri":
+        st.secrets["firebase_service_account"]["auth_uri"],
+
+        "token_uri":
+        st.secrets["firebase_service_account"]["token_uri"],
+
+        "auth_provider_x509_cert_url":
+        st.secrets["firebase_service_account"]["auth_provider_x509_cert_url"],
+
+        "client_x509_cert_url":
+        st.secrets["firebase_service_account"]["client_x509_cert_url"]
+
+    })
+
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+# ==================================================
+# SESSION STATE
+# ==================================================
+
+if "admin_logged_in" not in st.session_state:
+
+    st.session_state.admin_logged_in = False
+
+# ==================================================
 # LOAD MODEL
 # ==================================================
 
@@ -44,7 +139,7 @@ vectorizer = joblib.load(
 )
 
 # ==================================================
-# OCR READER
+# OCR
 # ==================================================
 
 reader = easyocr.Reader(['en'])
@@ -53,7 +148,9 @@ reader = easyocr.Reader(['en'])
 # STOPWORDS
 # ==================================================
 
-stop_words = set(stopwords.words("english"))
+stop_words = set(
+    stopwords.words("english")
+)
 
 custom_stopwords = {
 
@@ -78,7 +175,9 @@ custom_stopwords = {
 
 }
 
-stop_words.update(custom_stopwords)
+stop_words.update(
+    custom_stopwords
+)
 
 # ==================================================
 # LEMMATIZER
@@ -142,7 +241,9 @@ def remove_stopwords(text):
 
     ]
 
-    return " ".join(filtered_words)
+    return " ".join(
+        filtered_words
+    )
 
 # ==================================================
 # LEMMATIZATION
@@ -160,35 +261,55 @@ def lemmatize_text(text):
 
     ]
 
-    return " ".join(lemmatized_words)
+    return " ".join(
+        lemmatized_words
+    )
 
 # ==================================================
-# EXTRACT NEWS FROM URL
+# URL EXTRACTION
 # ==================================================
 
 def extract_news_from_url(url):
-    headers={
-        "User-Agent":
-        "Mozilla/5.0"
-    }
-    response=requests.get(
-        url,
-        headers=headers,
-        timeout=10
-    )
-    soup = BeautifulSoup(
-        response.text,
-        "html.parser"
-    )
-    paragraphs = soup.find_all("p")
-    article_text = " ".join(
 
-        [p.get_text() for p in paragraphs]
+    try:
 
-    )
-    return article_text
+        headers = {
+
+            "User-Agent":
+            "Mozilla/5.0"
+
+        }
+
+        response = requests.get(
+
+            url,
+
+            headers=headers,
+
+            timeout=10
+
+        )
+
+        article = Article(url)
+
+        article.set_html(
+            response.text
+        )
+
+        article.parse()
+
+        return article.text
+
+    except ArticleException:
+
+        return ""
+
+    except Exception:
+
+        return ""
+
 # ==================================================
-# OCR FROM IMAGE
+# OCR IMAGE
 # ==================================================
 
 def extract_text_from_image(image):
@@ -196,6 +317,7 @@ def extract_text_from_image(image):
     result = reader.readtext(
 
         np.array(image),
+
         detail=0
 
     )
@@ -206,13 +328,13 @@ def extract_text_from_image(image):
 # TITLE
 # ==================================================
 
-st.title("📰 Fake News Detection System")
+st.title(
+    "📰 Fake News Detection System"
+)
 
 # ==================================================
-# USER PANEL
+# DESCRIPTION
 # ==================================================
-
-st.header("User Panel")
 
 st.write(
     """
@@ -221,70 +343,106 @@ st.write(
     • News URL  
     • News screenshots/images
 
-    The AI model predicts whether
-    the news is Fake or Real.
+    AI predicts whether the news is Fake or Real.
     """
 )
 
 # ==================================================
-# ADMIN PANEL
+# ADMIN LOGIN
 # ==================================================
 
-st.sidebar.title("🔐 Admin Panel")
+st.sidebar.title(
+    "🔐 Admin Login"
+)
+
+admin_email = st.sidebar.text_input(
+    "Admin Email"
+)
 
 admin_password = st.sidebar.text_input(
     "Admin Password",
     type="password"
 )
 
-if admin_password == "myadminpanel123":
+if st.sidebar.button(
+    "Login"
+):
+
+    try:
+
+        auth.sign_in_with_email_and_password(
+
+            admin_email,
+            admin_password
+
+        )
+
+        st.session_state.admin_logged_in = True
+
+        st.sidebar.success(
+            "Login successful"
+        )
+
+        st.rerun()
+
+    except Exception:
+
+        st.sidebar.error(
+            "Invalid email or password"
+        )
+
+# ==================================================
+# ADMIN PANEL
+# ==================================================
+
+if st.session_state.admin_logged_in:
 
     st.sidebar.success(
         "Admin Access Granted"
     )
 
+    # ==============================================
+    # ADD TRAINING DATA
+    # ==============================================
+
+    st.sidebar.markdown("---")
+
     st.sidebar.subheader(
         "Add New Training Data"
     )
-
-    # ==============================================
-    # ADMIN URL INPUT
-    # ==============================================
 
     admin_url = st.sidebar.text_input(
         "News URL"
     )
 
-    # ==============================================
-    # ADMIN IMAGE INPUT
-    # ==============================================
-
     admin_image = st.sidebar.file_uploader(
-        "Upload News Image",
-        type=["png", "jpg", "jpeg"],
-        key="admin_image"
-    )
 
-    # ==============================================
-    # ADMIN TEXT INPUT
-    # ==============================================
+        "Upload News Image",
+
+        type=[
+            "png",
+            "jpg",
+            "jpeg"
+        ],
+
+        key="admin_image"
+
+    )
 
     admin_text = st.sidebar.text_area(
         "Or Paste News Text"
     )
 
-    # ==============================================
-    # LABEL
-    # ==============================================
-
     admin_label = st.sidebar.selectbox(
-        "Label",
-        ["Fake", "Real"]
-    )
 
-    # ==============================================
-    # SAVE BUTTON
-    # ==============================================
+        "Label",
+
+        [
+            "Fake",
+            "Real"
+        ]
+
+    )
 
     if st.sidebar.button(
         "Save Training Data"
@@ -294,23 +452,11 @@ if admin_password == "myadminpanel123":
 
             final_text = ""
 
-            # ======================================
-            # URL INPUT
-            # ======================================
-
             if admin_url.strip() != "":
 
-                extracted_url_text = (
-                    extract_news_from_url(
-                        admin_url
-                    )
+                final_text = extract_news_from_url(
+                    admin_url
                 )
-
-                final_text = extracted_url_text
-
-            # ======================================
-            # IMAGE INPUT
-            # ======================================
 
             elif admin_image is not None:
 
@@ -318,35 +464,19 @@ if admin_password == "myadminpanel123":
                     admin_image
                 )
 
-                extracted_image_text = (
-                    extract_text_from_image(
-                        image
-                    )
+                final_text = extract_text_from_image(
+                    image
                 )
-
-                final_text = extracted_image_text
-
-            # ======================================
-            # TEXT INPUT
-            # ======================================
 
             elif admin_text.strip() != "":
 
                 final_text = admin_text
-
-            # ======================================
-            # EMPTY INPUT
-            # ======================================
 
             else:
 
                 st.sidebar.warning(
                     "Please provide URL, image or text."
                 )
-
-            # ======================================
-            # CONTINUE IF TEXT EXISTS
-            # ======================================
 
             if final_text != "":
 
@@ -362,10 +492,6 @@ if admin_password == "myadminpanel123":
                     cleaned_text
                 )
 
-                # ==================================
-                # LOAD EXISTING DATA
-                # ==================================
-
                 try:
 
                     existing_data = pd.read_csv(
@@ -375,65 +501,56 @@ if admin_password == "myadminpanel123":
                 except:
 
                     existing_data = pd.DataFrame(
+
                         columns=[
                             "text",
                             "clean_text",
                             "label"
                         ]
-                    )
 
-                # ==================================
-                # DUPLICATE CHECK
-                # ==================================
+                    )
 
                 if cleaned_text in existing_data[
                     "clean_text"
                 ].values:
 
                     st.sidebar.warning(
-                        "This news already exists in admin_data.csv"
+                        "This news already exists."
                     )
 
                 else:
 
-                    # ==============================
-                    # LABEL VALUE
-                    # ==============================
-
                     label_value = (
-                        0 if admin_label == "Fake"
-                        else 1
-                    )
 
-                    # ==============================
-                    # NEW DATAFRAME
-                    # ==============================
+                        0 if admin_label == "Fake"
+
+                        else 1
+
+                    )
 
                     new_data = pd.DataFrame({
 
-                        "text": [final_text],
+                        "text":
+                        [final_text],
 
-                        "clean_text": [cleaned_text],
+                        "clean_text":
+                        [cleaned_text],
 
-                        "label": [label_value]
+                        "label":
+                        [label_value]
 
                     })
 
-                    # ==============================
-                    # CONCAT DATA
-                    # ==============================
-
                     updated_data = pd.concat(
 
-                        [existing_data, new_data],
+                        [
+                            existing_data,
+                            new_data
+                        ],
 
                         ignore_index=True
 
                     )
-
-                    # ==============================
-                    # SAVE DATA
-                    # ==============================
 
                     updated_data.to_csv(
 
@@ -444,16 +561,8 @@ if admin_password == "myadminpanel123":
                     )
 
                     st.sidebar.success(
-                        "Training data saved successfully."
+                        "Training data saved."
                     )
-
-                    st.sidebar.write(
-                        f"Dataset Size: {len(updated_data)}"
-                    )
-
-                    # ==============================
-                    # AUTO RETRAIN
-                    # ==============================
 
                     st.sidebar.info(
                         "Retraining model..."
@@ -462,10 +571,6 @@ if admin_password == "myadminpanel123":
                     os.system(
                         "python train.py"
                     )
-
-                    # ==============================
-                    # RELOAD MODEL
-                    # ==============================
 
                     model = joblib.load(
                         "models/fake_news_model.pkl"
@@ -476,7 +581,7 @@ if admin_password == "myadminpanel123":
                     )
 
                     st.sidebar.success(
-                        "Model retrained successfully."
+                        "Model retrained."
                     )
 
         except Exception as e:
@@ -487,9 +592,9 @@ if admin_password == "myadminpanel123":
 
             st.sidebar.write(e)
 
-    # ==================================================
-    # ADMIN DATA MANAGEMENT
-    # ==================================================
+    # ==============================================
+    # MANAGE SAVED NEWS
+    # ==============================================
 
     st.sidebar.markdown("---")
 
@@ -505,10 +610,6 @@ if admin_password == "myadminpanel123":
 
         if len(admin_dataset) > 0:
 
-            # ======================================
-            # SELECT NEWS
-            # ======================================
-
             selected_index = st.sidebar.selectbox(
 
                 "Select News",
@@ -523,10 +624,6 @@ if admin_password == "myadminpanel123":
             selected_row = admin_dataset.loc[
                 selected_index
             ]
-
-            st.sidebar.write(
-                "### Selected News"
-            )
 
             st.sidebar.write(
                 selected_row["text"][:500]
@@ -546,15 +643,14 @@ if admin_password == "myadminpanel123":
                 f"Current Label: {current_label}"
             )
 
-            # ======================================
-            # UPDATE LABEL
-            # ======================================
-
             new_label = st.sidebar.selectbox(
 
                 "Update Label",
 
-                ["Fake", "Real"],
+                [
+                    "Fake",
+                    "Real"
+                ],
 
                 key="update_label"
 
@@ -570,7 +666,6 @@ if admin_password == "myadminpanel123":
                 ] = (
 
                     0 if new_label == "Fake"
-
                     else 1
 
                 )
@@ -584,34 +679,14 @@ if admin_password == "myadminpanel123":
                 )
 
                 st.sidebar.success(
-                    "News label updated successfully."
-                )
-
-                st.sidebar.info(
-                    "Retraining model..."
+                    "Label updated."
                 )
 
                 os.system(
                     "python train.py"
                 )
 
-                model = joblib.load(
-                    "models/fake_news_model.pkl"
-                )
-
-                vectorizer = joblib.load(
-                    "models/tfidf_vectorizer.pkl"
-                )
-
-                st.sidebar.success(
-                    "Model retrained successfully."
-                )
-
-            # ======================================
-            # DELETE NEWS
-            # ======================================
-
-            st.sidebar.markdown("---")
+                st.rerun()
 
             if st.sidebar.button(
                 "Delete Selected News"
@@ -622,8 +697,11 @@ if admin_password == "myadminpanel123":
                 )
 
                 admin_dataset.reset_index(
+
                     drop=True,
+
                     inplace=True
+
                 )
 
                 admin_dataset.to_csv(
@@ -635,46 +713,207 @@ if admin_password == "myadminpanel123":
                 )
 
                 st.sidebar.success(
-                    "News deleted successfully."
-                )
-
-                st.sidebar.info(
-                    "Retraining model..."
+                    "News deleted."
                 )
 
                 os.system(
                     "python train.py"
                 )
 
-                model = joblib.load(
-                    "models/fake_news_model.pkl"
-                )
-
-                vectorizer = joblib.load(
-                    "models/tfidf_vectorizer.pkl"
-                )
-
-                st.sidebar.success(
-                    "Model retrained successfully."
-                )
+                st.rerun()
 
         else:
 
             st.sidebar.info(
-                "No saved admin news found."
+                "No saved news."
             )
 
     except Exception as e:
 
         st.sidebar.error(
-            "Could not load admin dataset."
+            "Could not load dataset."
         )
 
         st.sidebar.write(e)
 
+    # ==============================================
+    # FEEDBACK PANEL
+    # ==============================================
+
+    st.sidebar.markdown("---")
+
+    st.sidebar.subheader(
+        "📩 User Feedbacks"
+    )
+
+    feedback_docs = db.collection(
+        "feedbacks"
+    ).stream()
+
+    feedback_list = []
+
+    for doc in feedback_docs:
+
+        feedback_data = doc.to_dict()
+
+        feedback_data["doc_id"] = doc.id
+
+        feedback_list.append(
+            feedback_data
+        )
+
+    # ==========================================
+    # SEARCH
+    # ==========================================
+
+    search_feedback = st.sidebar.text_input(
+        "🔍 Search Feedback"
+    )
+
+    # ==========================================
+    # SORT
+    # ==========================================
+
+    sort_option = st.sidebar.selectbox(
+
+        "Sort Feedbacks",
+
+        [
+            "Newest First",
+            "Oldest First"
+        ]
+
+    )
+
+    # ==========================================
+    # SEARCH FILTER
+    # ==========================================
+
+    if search_feedback.strip() != "":
+
+        feedback_list = [
+
+            feedback for feedback in feedback_list
+
+            if search_feedback.lower()
+
+            in feedback.get(
+                "name",
+                ""
+            ).lower()
+
+            or
+
+            search_feedback.lower()
+
+            in feedback.get(
+                "feedback",
+                ""
+            ).lower()
+
+        ]
+
+    # ==========================================
+    # SORTING
+    # ==========================================
+
+    if sort_option == "Newest First":
+
+        feedback_list = sorted(
+
+            feedback_list,
+
+            key=lambda x:
+            x.get(
+                "timestamp",
+                datetime.min
+            ),
+
+            reverse=True
+
+        )
+
+    else:
+
+        feedback_list = sorted(
+
+            feedback_list,
+
+            key=lambda x:
+            x.get(
+                "timestamp",
+                datetime.min
+            )
+
+        )
+
+    # ==========================================
+    # SHOW FEEDBACKS
+    # ==========================================
+
+    if len(feedback_list) > 0:
+
+        for feedback in feedback_list[:20]:
+
+            with st.sidebar.expander(
+
+                f"👤 {feedback['name']}",
+
+                expanded=False
+
+            ):
+
+                st.write(
+                    feedback["feedback"]
+                )
+
+                timestamp = feedback.get(
+                    "timestamp"
+                )
+
+                if timestamp:
+
+                    formatted_time = timestamp.strftime(
+                        "%d.%m.%Y %H:%M"
+                    )
+
+                    st.caption(
+                        f"🕒 {formatted_time}"
+                    )
+
+                if st.button(
+
+                    "Delete Feedback",
+
+                    key=feedback["doc_id"]
+
+                ):
+
+                    db.collection(
+                        "feedbacks"
+                    ).document(
+                        feedback["doc_id"]
+                    ).delete()
+
+                    st.success(
+                        "Feedback deleted"
+                    )
+
+                    st.rerun()
+
+    else:
+
+        st.sidebar.info(
+            "No feedback found."
+        )
+
 # ==================================================
-# USER INPUTS
+# USER PANEL
 # ==================================================
+
+st.header(
+    "Analyze News"
+)
 
 col1, col2 = st.columns(2)
 
@@ -687,85 +926,60 @@ with col1:
 with col2:
 
     uploaded_image = st.file_uploader(
+
         "Upload News Image",
-        type=["png", "jpg", "jpeg"]
+
+        type=[
+            "png",
+            "jpg",
+            "jpeg"
+        ]
+
     )
 
 # ==================================================
 # ANALYZE BUTTON
 # ==================================================
 
-if st.button("Analyze News"):
+if st.button(
+    "Analyze News"
+):
 
     try:
 
         input_text = ""
 
-        # ==========================================
-        # URL INPUT
-        # ==========================================
-
         if news_url.strip() != "":
 
             with st.spinner(
-                "Extracting article from URL..."
+                "Extracting article..."
             ):
 
-                article_text = extract_news_from_url(
+                input_text = extract_news_from_url(
                     news_url
                 )
-
-                input_text = article_text
-
-        # ==========================================
-        # IMAGE INPUT
-        # ==========================================
 
         elif uploaded_image is not None:
 
             with st.spinner(
-                "Reading text from image..."
+                "Reading image..."
             ):
 
                 image = Image.open(
                     uploaded_image
                 )
 
-                extracted_text = extract_text_from_image(
+                input_text = extract_text_from_image(
                     image
                 )
-
-                input_text = extracted_text
-
-        # ==========================================
-        # EMPTY INPUT
-        # ==========================================
 
         else:
 
             st.warning(
-                "Please provide a URL or image."
+                "Please provide URL or image."
             )
-
-        # ==========================================
-        # CONTINUE IF TEXT EXISTS
-        # ==========================================
 
         if input_text != "":
-
-            st.subheader("Extracted Text")
-
-            st.write(
-                input_text[:5000]
-            )
-
-            st.write(
-                f"Extracted Character Count: {len(input_text)}"
-            )
-
-            # ======================================
-            # PREPROCESSING
-            # ======================================
 
             cleaned_text = clean_text(
                 input_text
@@ -779,25 +993,9 @@ if st.button("Analyze News"):
                 cleaned_text
             )
 
-            st.subheader(
-                "Cleaned Text"
-            )
-
-            st.write(
-                cleaned_text[:3000]
-            )
-
-            # ======================================
-            # TF-IDF
-            # ======================================
-
             vectorized_text = vectorizer.transform(
                 [cleaned_text]
             )
-
-            # ======================================
-            # PREDICTION
-            # ======================================
 
             prediction = model.predict(
                 vectorized_text
@@ -807,12 +1005,6 @@ if st.button("Analyze News"):
                 vectorized_text
             )[0]
 
-            score = abs(confidence)
-
-            # ======================================
-            # RESULT
-            # ======================================
-
             st.subheader(
                 "Prediction Result"
             )
@@ -821,20 +1013,7 @@ if st.button("Analyze News"):
                 f"Confidence Score: {confidence:.2f}"
             )
 
-            if score < 0.2:
-
-                st.warning(
-                    """
-                    ⚠️ Inconclusive Analysis
-
-                    The system could not confidently classify
-                    this article as either real or fake news.
-
-                    Additional verification is recommended.
-                    """
-                )
-
-            elif prediction == 0:
+            if prediction == 0:
 
                 st.error(
                     "🚨 Fake News"
@@ -849,7 +1028,57 @@ if st.button("Analyze News"):
     except Exception as e:
 
         st.error(
-            "Could not analyze the provided news source."
+            "Could not analyze news."
         )
 
         st.write(e)
+
+# ==================================================
+# FEEDBACK SECTION
+# ==================================================
+
+st.markdown("---")
+
+st.header(
+    "💬 Feedback"
+)
+
+feedback_name = st.text_input(
+    "Your Name"
+)
+
+feedback_text = st.text_area(
+    "Write your feedback"
+)
+
+if st.button(
+    "Send Feedback"
+):
+
+    if feedback_name.strip() == "" \
+    or feedback_text.strip() == "":
+
+        st.warning(
+            "Please fill all fields."
+        )
+
+    else:
+
+        db.collection(
+            "feedbacks"
+        ).add({
+
+            "name":
+            feedback_name,
+
+            "feedback":
+            feedback_text,
+
+            "timestamp":
+            datetime.utcnow()
+
+        })
+
+        st.success(
+            "Feedback sent successfully."
+        )
