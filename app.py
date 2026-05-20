@@ -137,7 +137,7 @@ from huggingface_hub import HfApi, login
 # HUGGING FACE
 # ==========================================
 
-HF_TOKEN = st.secrets["HF_TOKEN"]
+HF_TOKEN = st.secrets["hf_token"]
 
 login(token=HF_TOKEN)
 
