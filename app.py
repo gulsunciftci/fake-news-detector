@@ -131,37 +131,40 @@ if "admin_logged_in" not in st.session_state:
 # ==================================================
 # HUGGING FACE FUNCTIONS
 # ==================================================
+from huggingface_hub import HfApi, login
 
-HF_REPO_ID = "gulsunnciftci/fake-news-data"
-HF_TOKEN = st.secrets.get("hf_token", None)
+# ==========================================
+# HUGGING FACE
+# ==========================================
 
+HF_TOKEN = st.secrets["HF_TOKEN"]
 
-def hf_guncelle(dosya_yolu):
+login(token=HF_TOKEN)
+
+api = HfApi()
+
+def upload_to_huggingface():
     try:
-        api = HfApi(token=HF_TOKEN)
+
+        # Repo yoksa oluştur
+        api.create_repo(
+            repo_id="gulsunnciftci/fake-news-data",
+            repo_type="dataset",
+            exist_ok=True
+        )
+
+        # CSV upload
         api.upload_file(
-            path_or_fileobj=dosya_yolu,
-            path_in_repo=dosya_yolu.split("/")[-1],
-            repo_id=HF_REPO_ID,
+            path_or_fileobj="data/admin_data.csv",
+            path_in_repo="admin_data.csv",
+            repo_id="gulsunnciftci/fake-news-data",
             repo_type="dataset"
         )
+
+        st.success("✅ Hugging Face dataset updated!")
+
     except Exception as e:
-        st.sidebar.warning(f"HF güncelleme hatası: {e}")
-
-
-def admin_data_yukle():
-    try:
-        path = hf_hub_download(
-            repo_id=HF_REPO_ID,
-            filename="admin_data.csv",
-            repo_type="dataset",
-            token=HF_TOKEN
-        )
-        return pd.read_csv(path)
-    except Exception:
-        return pd.DataFrame(
-            columns=["text", "clean_text", "label"]
-        )
+        st.error(f"HF güncelleme hatası: {e}")
 
 # ==================================================
 # LOAD MODEL
@@ -1109,7 +1112,7 @@ if st.button(
             datetime.utcnow()
 
         })
-
+        upload_to_huggingface()
         st.success(
             "Feedback sent successfully."
         )
