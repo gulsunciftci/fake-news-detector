@@ -495,7 +495,7 @@ if st.session_state.admin_logged_in:
                 try:
 
                     existing_data = pd.read_csv(
-                        "data/admin_data.csv"
+                        "../data/admin_data.csv"
                     )
 
                 except:
