@@ -17,3 +17,4 @@ beautifulsoup4
 requests
 firebase-admin
 pyrebase4
+huggingface_hub

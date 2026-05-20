@@ -22,6 +22,8 @@ from firebase_admin import firestore
 
 from datetime import datetime
 
+from huggingface_hub import HfApi, hf_hub_download
+
 # ==================================================
 # NLTK
 # ==================================================
@@ -125,6 +127,41 @@ db = firestore.client()
 if "admin_logged_in" not in st.session_state:
 
     st.session_state.admin_logged_in = False
+
+# ==================================================
+# HUGGING FACE FUNCTIONS
+# ==================================================
+
+HF_REPO_ID = "gulsunnciftci/fake-news-data"
+HF_TOKEN = st.secrets.get("hf_token", None)
+
+
+def hf_guncelle(dosya_yolu):
+    try:
+        api = HfApi(token=HF_TOKEN)
+        api.upload_file(
+            path_or_fileobj=dosya_yolu,
+            path_in_repo=dosya_yolu.split("/")[-1],
+            repo_id=HF_REPO_ID,
+            repo_type="dataset"
+        )
+    except Exception as e:
+        st.sidebar.warning(f"HF güncelleme hatası: {e}")
+
+
+def admin_data_yukle():
+    try:
+        path = hf_hub_download(
+            repo_id=HF_REPO_ID,
+            filename="admin_data.csv",
+            repo_type="dataset",
+            token=HF_TOKEN
+        )
+        return pd.read_csv(path)
+    except Exception:
+        return pd.DataFrame(
+            columns=["text", "clean_text", "label"]
+        )
 
 # ==================================================
 # LOAD MODEL
@@ -492,23 +529,7 @@ if st.session_state.admin_logged_in:
                     cleaned_text
                 )
 
-                try:
-
-                    existing_data = pd.read_csv(
-                        "../data/admin_data.csv"
-                    )
-
-                except:
-
-                    existing_data = pd.DataFrame(
-
-                        columns=[
-                            "text",
-                            "clean_text",
-                            "label"
-                        ]
-
-                    )
+                existing_data = admin_data_yukle()
 
                 if cleaned_text in existing_data[
                     "clean_text"
@@ -552,6 +573,8 @@ if st.session_state.admin_logged_in:
 
                     )
 
+                    os.makedirs("data", exist_ok=True)
+
                     updated_data.to_csv(
 
                         "data/admin_data.csv",
@@ -559,6 +582,8 @@ if st.session_state.admin_logged_in:
                         index=False
 
                     )
+
+                    hf_guncelle("data/admin_data.csv")
 
                     st.sidebar.success(
                         "Training data saved."
@@ -604,9 +629,7 @@ if st.session_state.admin_logged_in:
 
     try:
 
-        admin_dataset = pd.read_csv(
-            "data/admin_data.csv"
-        )
+        admin_dataset = admin_data_yukle()
 
         if len(admin_dataset) > 0:
 
@@ -670,6 +693,8 @@ if st.session_state.admin_logged_in:
 
                 )
 
+                os.makedirs("data", exist_ok=True)
+
                 admin_dataset.to_csv(
 
                     "data/admin_data.csv",
@@ -677,6 +702,8 @@ if st.session_state.admin_logged_in:
                     index=False
 
                 )
+
+                hf_guncelle("data/admin_data.csv")
 
                 st.sidebar.success(
                     "Label updated."
@@ -704,6 +731,8 @@ if st.session_state.admin_logged_in:
 
                 )
 
+                os.makedirs("data", exist_ok=True)
+
                 admin_dataset.to_csv(
 
                     "data/admin_data.csv",
@@ -711,6 +740,8 @@ if st.session_state.admin_logged_in:
                     index=False
 
                 )
+
+                hf_guncelle("data/admin_data.csv")
 
                 st.sidebar.success(
                     "News deleted."
