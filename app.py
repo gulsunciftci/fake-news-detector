@@ -1,3 +1,7 @@
+# ==================================================
+# IMPORTS
+# ==================================================
+
 import streamlit as st
 import pandas as pd
 import joblib
@@ -22,7 +26,7 @@ from firebase_admin import firestore
 
 from datetime import datetime
 
-from huggingface_hub import HfApi, hf_hub_download
+from huggingface_hub import HfApi, login
 
 # ==================================================
 # NLTK
@@ -129,42 +133,82 @@ if "admin_logged_in" not in st.session_state:
     st.session_state.admin_logged_in = False
 
 # ==================================================
-# HUGGING FACE FUNCTIONS
-# ==================================================
-from huggingface_hub import HfApi, login
-
-# ==========================================
 # HUGGING FACE
-# ==========================================
+# ==================================================
 
-HF_TOKEN = st.secrets["hf_token"]
+HF_TOKEN = st.secrets["HF_TOKEN"]
 
 login(token=HF_TOKEN)
 
 api = HfApi()
 
+# ==================================================
+# ADMIN DATA FUNCTIONS
+# ==================================================
+
+def admin_data_yukle():
+
+    os.makedirs("data", exist_ok=True)
+
+    file_path = "data/admin_data.csv"
+
+    if not os.path.exists(file_path):
+
+        df = pd.DataFrame({
+
+            "text": [],
+            "clean_text": [],
+            "label": []
+
+        })
+
+        df.to_csv(file_path, index=False)
+
+    return pd.read_csv(file_path)
+
+# ==================================================
+# HF UPDATE
+# ==================================================
+
 def upload_to_huggingface():
+
     try:
 
-        # Repo yoksa oluştur
         api.create_repo(
+
             repo_id="gulsunnciftci/fake-news-data",
+
             repo_type="dataset",
+
             exist_ok=True
+
         )
 
-        # CSV upload
         api.upload_file(
-            path_or_fileobj="data/admin_data.csv",
-            path_in_repo="admin_data.csv",
-            repo_id="gulsunnciftci/fake-news-data",
-            repo_type="dataset"
-        )
 
-        st.success("✅ Hugging Face dataset updated!")
+            path_or_fileobj="data/admin_data.csv",
+
+            path_in_repo="admin_data.csv",
+
+            repo_id="gulsunnciftci/fake-news-data",
+
+            repo_type="dataset"
+
+        )
 
     except Exception as e:
-        st.error(f"HF güncelleme hatası: {e}")
+
+        st.error(f"HF update error: {e}")
+
+def hf_guncelle(file_path):
+
+    try:
+
+        upload_to_huggingface()
+
+    except Exception as e:
+
+        st.error(f"HF update error: {e}")
 
 # ==================================================
 # LOAD MODEL
@@ -340,11 +384,7 @@ def extract_news_from_url(url):
 
         return article.text
 
-    except ArticleException:
-
-        return ""
-
-    except Exception:
+    except:
 
         return ""
 
@@ -441,339 +481,6 @@ if st.session_state.admin_logged_in:
         "Admin Access Granted"
     )
 
-    # ==============================================
-    # ADD TRAINING DATA
-    # ==============================================
-
-    st.sidebar.markdown("---")
-
-    st.sidebar.subheader(
-        "Add New Training Data"
-    )
-
-    admin_url = st.sidebar.text_input(
-        "News URL"
-    )
-
-    admin_image = st.sidebar.file_uploader(
-
-        "Upload News Image",
-
-        type=[
-            "png",
-            "jpg",
-            "jpeg"
-        ],
-
-        key="admin_image"
-
-    )
-
-    admin_text = st.sidebar.text_area(
-        "Or Paste News Text"
-    )
-
-    admin_label = st.sidebar.selectbox(
-
-        "Label",
-
-        [
-            "Fake",
-            "Real"
-        ]
-
-    )
-
-    if st.sidebar.button(
-        "Save Training Data"
-    ):
-
-        try:
-
-            final_text = ""
-
-            if admin_url.strip() != "":
-
-                final_text = extract_news_from_url(
-                    admin_url
-                )
-
-            elif admin_image is not None:
-
-                image = Image.open(
-                    admin_image
-                )
-
-                final_text = extract_text_from_image(
-                    image
-                )
-
-            elif admin_text.strip() != "":
-
-                final_text = admin_text
-
-            else:
-
-                st.sidebar.warning(
-                    "Please provide URL, image or text."
-                )
-
-            if final_text != "":
-
-                cleaned_text = clean_text(
-                    final_text
-                )
-
-                cleaned_text = remove_stopwords(
-                    cleaned_text
-                )
-
-                cleaned_text = lemmatize_text(
-                    cleaned_text
-                )
-
-                existing_data = admin_data_yukle()
-
-                if cleaned_text in existing_data[
-                    "clean_text"
-                ].values:
-
-                    st.sidebar.warning(
-                        "This news already exists."
-                    )
-
-                else:
-
-                    label_value = (
-
-                        0 if admin_label == "Fake"
-
-                        else 1
-
-                    )
-
-                    new_data = pd.DataFrame({
-
-                        "text":
-                        [final_text],
-
-                        "clean_text":
-                        [cleaned_text],
-
-                        "label":
-                        [label_value]
-
-                    })
-
-                    updated_data = pd.concat(
-
-                        [
-                            existing_data,
-                            new_data
-                        ],
-
-                        ignore_index=True
-
-                    )
-
-                    os.makedirs("data", exist_ok=True)
-
-                    updated_data.to_csv(
-
-                        "data/admin_data.csv",
-
-                        index=False
-
-                    )
-
-                    hf_guncelle("data/admin_data.csv")
-
-                    st.sidebar.success(
-                        "Training data saved."
-                    )
-
-                    st.sidebar.info(
-                        "Retraining model..."
-                    )
-
-                    os.system(
-                        "python train.py"
-                    )
-
-                    model = joblib.load(
-                        "models/fake_news_model.pkl"
-                    )
-
-                    vectorizer = joblib.load(
-                        "models/tfidf_vectorizer.pkl"
-                    )
-
-                    st.sidebar.success(
-                        "Model retrained."
-                    )
-
-        except Exception as e:
-
-            st.sidebar.error(
-                "Could not save training data."
-            )
-
-            st.sidebar.write(e)
-
-    # ==============================================
-    # MANAGE SAVED NEWS
-    # ==============================================
-
-    st.sidebar.markdown("---")
-
-    st.sidebar.subheader(
-        "Manage Saved News"
-    )
-
-    try:
-
-        admin_dataset = admin_data_yukle()
-
-        if len(admin_dataset) > 0:
-
-            selected_index = st.sidebar.selectbox(
-
-                "Select News",
-
-                options=admin_dataset.index,
-
-                format_func=lambda x:
-                admin_dataset.loc[x, "text"][:80] + "..."
-
-            )
-
-            selected_row = admin_dataset.loc[
-                selected_index
-            ]
-
-            st.sidebar.write(
-                selected_row["text"][:500]
-            )
-
-            current_label = (
-
-                "Fake"
-
-                if selected_row["label"] == 0
-
-                else "Real"
-
-            )
-
-            st.sidebar.write(
-                f"Current Label: {current_label}"
-            )
-
-            new_label = st.sidebar.selectbox(
-
-                "Update Label",
-
-                [
-                    "Fake",
-                    "Real"
-                ],
-
-                key="update_label"
-
-            )
-
-            if st.sidebar.button(
-                "Update News Label"
-            ):
-
-                admin_dataset.loc[
-                    selected_index,
-                    "label"
-                ] = (
-
-                    0 if new_label == "Fake"
-                    else 1
-
-                )
-
-                os.makedirs("data", exist_ok=True)
-
-                admin_dataset.to_csv(
-
-                    "data/admin_data.csv",
-
-                    index=False
-
-                )
-
-                hf_guncelle("data/admin_data.csv")
-
-                st.sidebar.success(
-                    "Label updated."
-                )
-
-                os.system(
-                    "python train.py"
-                )
-
-                st.rerun()
-
-            if st.sidebar.button(
-                "Delete Selected News"
-            ):
-
-                admin_dataset = admin_dataset.drop(
-                    selected_index
-                )
-
-                admin_dataset.reset_index(
-
-                    drop=True,
-
-                    inplace=True
-
-                )
-
-                os.makedirs("data", exist_ok=True)
-
-                admin_dataset.to_csv(
-
-                    "data/admin_data.csv",
-
-                    index=False
-
-                )
-
-                hf_guncelle("data/admin_data.csv")
-
-                st.sidebar.success(
-                    "News deleted."
-                )
-
-                os.system(
-                    "python train.py"
-                )
-
-                st.rerun()
-
-        else:
-
-            st.sidebar.info(
-                "No saved news."
-            )
-
-    except Exception as e:
-
-        st.sidebar.error(
-            "Could not load dataset."
-        )
-
-        st.sidebar.write(e)
-
-    # ==============================================
-    # FEEDBACK PANEL
-    # ==============================================
-
     st.sidebar.markdown("---")
 
     st.sidebar.subheader(
@@ -796,17 +503,9 @@ if st.session_state.admin_logged_in:
             feedback_data
         )
 
-    # ==========================================
-    # SEARCH
-    # ==========================================
-
     search_feedback = st.sidebar.text_input(
         "🔍 Search Feedback"
     )
-
-    # ==========================================
-    # SORT
-    # ==========================================
 
     sort_option = st.sidebar.selectbox(
 
@@ -818,10 +517,6 @@ if st.session_state.admin_logged_in:
         ]
 
     )
-
-    # ==========================================
-    # SEARCH FILTER
-    # ==========================================
 
     if search_feedback.strip() != "":
 
@@ -846,10 +541,6 @@ if st.session_state.admin_logged_in:
             ).lower()
 
         ]
-
-    # ==========================================
-    # SORTING
-    # ==========================================
 
     if sort_option == "Newest First":
 
@@ -881,13 +572,9 @@ if st.session_state.admin_logged_in:
 
         )
 
-    # ==========================================
-    # SHOW FEEDBACKS
-    # ==========================================
-
     if len(feedback_list) > 0:
 
-        for feedback in feedback_list[:20]:
+        for feedback in feedback_list:
 
             with st.sidebar.expander(
 
@@ -934,12 +621,6 @@ if st.session_state.admin_logged_in:
                     )
 
                     st.rerun()
-
-    else:
-
-        st.sidebar.info(
-            "No feedback found."
-        )
 
 # ==================================================
 # USER PANEL
@@ -1112,7 +793,9 @@ if st.button(
             datetime.utcnow()
 
         })
+
         upload_to_huggingface()
+
         st.success(
             "Feedback sent successfully."
         )
