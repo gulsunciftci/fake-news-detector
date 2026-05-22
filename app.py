@@ -481,6 +481,321 @@ if st.session_state.admin_logged_in:
         "Admin Access Granted"
     )
 
+    # ==============================================
+    # ADD TRAINING DATA
+    # ==============================================
+
+    st.sidebar.markdown("---")
+
+    st.sidebar.subheader(
+        "Add New Training Data"
+    )
+
+    admin_url = st.sidebar.text_input(
+        "News URL"
+    )
+
+    admin_image = st.sidebar.file_uploader(
+
+        "Upload News Image",
+
+        type=[
+            "png",
+            "jpg",
+            "jpeg"
+        ],
+
+        key="admin_image"
+
+    )
+
+    admin_text = st.sidebar.text_area(
+        "Or Paste News Text"
+    )
+
+    admin_label = st.sidebar.selectbox(
+
+        "Label",
+
+        [
+            "Fake",
+            "Real"
+        ]
+
+    )
+
+    if st.sidebar.button(
+        "Save Training Data"
+    ):
+
+        try:
+
+            final_text = ""
+
+            if admin_url.strip() != "":
+
+                final_text = extract_news_from_url(
+                    admin_url
+                )
+
+            elif admin_image is not None:
+
+                image = Image.open(
+                    admin_image
+                )
+
+                final_text = extract_text_from_image(
+                    image
+                )
+
+            elif admin_text.strip() != "":
+
+                final_text = admin_text
+
+            else:
+
+                st.sidebar.warning(
+                    "Please provide URL, image or text."
+                )
+
+            if final_text != "":
+
+                cleaned_text = clean_text(
+                    final_text
+                )
+
+                cleaned_text = remove_stopwords(
+                    cleaned_text
+                )
+
+                cleaned_text = lemmatize_text(
+                    cleaned_text
+                )
+
+                existing_data = admin_data_yukle()
+
+                if cleaned_text in existing_data[
+                    "clean_text"
+                ].values:
+
+                    st.sidebar.warning(
+                        "This news already exists."
+                    )
+
+                else:
+
+                    label_value = (
+
+                        0 if admin_label == "Fake"
+
+                        else 1
+
+                    )
+
+                    new_data = pd.DataFrame({
+
+                        "text":
+                        [final_text],
+
+                        "clean_text":
+                        [cleaned_text],
+
+                        "label":
+                        [label_value]
+
+                    })
+
+                    updated_data = pd.concat(
+
+                        [
+                            existing_data,
+                            new_data
+                        ],
+
+                        ignore_index=True
+
+                    )
+
+                    updated_data.to_csv(
+
+                        "data/admin_data.csv",
+
+                        index=False
+
+                    )
+
+                    hf_guncelle("data/admin_data.csv")
+
+                    st.sidebar.success(
+                        "Training data saved."
+                    )
+                with st.sidebar:
+                    with st.spinner(
+                         "Model training..."
+                    ):
+                           os.system(
+                               "python train.py"
+                           )
+                    st.sidebar.success(
+                          "✅ Model trained successfully!"
+                    )
+                  
+                    import time
+                    time.sleep(2)  
+                    st.rerun()
+
+        except Exception as e:
+
+            st.sidebar.error(
+                "Could not save training data."
+            )
+
+            st.sidebar.write(e)
+
+    # ==============================================
+    # MANAGE SAVED NEWS
+    # ==============================================
+
+    st.sidebar.markdown("---")
+
+    st.sidebar.subheader(
+        "Manage Saved News"
+    )
+
+    try:
+
+        admin_dataset = admin_data_yukle()
+
+        if len(admin_dataset) > 0:
+
+            selected_index = st.sidebar.selectbox(
+
+                "Select News",
+
+                options=admin_dataset.index,
+
+                format_func=lambda x:
+                admin_dataset.loc[x, "text"][:80] + "..."
+
+            )
+
+            selected_row = admin_dataset.loc[
+                selected_index
+            ]
+
+            st.sidebar.write(
+                selected_row["text"][:500]
+            )
+
+            current_label = (
+
+                "Fake"
+
+                if selected_row["label"] == 0
+
+                else "Real"
+
+            )
+
+            st.sidebar.write(
+                f"Current Label: {current_label}"
+            )
+
+            new_label = st.sidebar.selectbox(
+
+                "Update Label",
+
+                [
+                    "Fake",
+                    "Real"
+                ],
+
+                key="update_label"
+
+            )
+
+            if st.sidebar.button(
+                "Update News Label"
+            ):
+
+                admin_dataset.loc[
+                    selected_index,
+                    "label"
+                ] = (
+
+                    0 if new_label == "Fake"
+                    else 1
+
+                )
+
+                admin_dataset.to_csv(
+
+                    "data/admin_data.csv",
+
+                    index=False
+
+                )
+
+                hf_guncelle("data/admin_data.csv")
+
+                st.sidebar.success(
+                    "Label updated."
+                )
+
+                os.system(
+                    "python train.py"
+                )
+
+                st.rerun()
+
+            if st.sidebar.button(
+                "Delete Selected News"
+            ):
+
+                admin_dataset = admin_dataset.drop(
+                    selected_index
+                )
+
+                admin_dataset.reset_index(
+
+                    drop=True,
+
+                    inplace=True
+
+                )
+
+                admin_dataset.to_csv(
+
+                    "data/admin_data.csv",
+
+                    index=False
+
+                )
+
+                hf_guncelle("data/admin_data.csv")
+
+                st.sidebar.success(
+                    "News deleted."
+                )
+
+                os.system(
+                    "python train.py"
+                )
+
+                st.rerun()
+
+    except Exception as e:
+
+        st.sidebar.error(
+            "Could not load dataset."
+        )
+
+        st.sidebar.write(e)
+
+    # ==============================================
+    # FEEDBACK PANEL
+    # ==============================================
+
     st.sidebar.markdown("---")
 
     st.sidebar.subheader(
@@ -593,14 +908,21 @@ if st.session_state.admin_logged_in:
                 )
 
                 if timestamp:
+                   try:  
+                        if hasattr(timestamp,"to_pydatetime"):
+                            timestamp=timestamp.to_pydatetime()
 
-                    formatted_time = timestamp.strftime(
-                        "%d.%m.%Y %H:%M"
-                    )
+                        formatted_time = timestamp.strftime(
+                             "%d.%m.%Y %H:%M"
+                        )
 
-                    st.caption(
-                        f"🕒 {formatted_time}"
-                    )
+                        st.caption(
+                             f"🕒 {formatted_time}"
+                        )
+                   except:
+                       st.caption(
+                           "🕒 Date unavailable"
+                       )
 
                 if st.button(
 
@@ -622,6 +944,9 @@ if st.session_state.admin_logged_in:
 
                     st.rerun()
 
+# ==================================================
+# USER PANEL
+# ==================================================
 # ==================================================
 # USER PANEL
 # ==================================================
