@@ -136,9 +136,9 @@ if "admin_logged_in" not in st.session_state:
 # HUGGING FACE
 # ==================================================
 
-HF_TOKEN = st.secrets["HF_TOKEN"]
+hf_token = st.secrets["hf_token"]
 
-login(token=HF_TOKEN)
+login(token=hf_token)
 
 api = HfApi()
 
