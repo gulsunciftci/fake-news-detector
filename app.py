@@ -40,9 +40,9 @@ nltk.download("wordnet")
 # ==================================================
 
 st.set_page_config(
-    page_title="Fake News Detection",
+    page_title="Fake News Detection", # Tarayıcı sekmesi adı.
     page_icon="📰",
-    layout="wide"
+    layout="wide" # Tam geniş ekran görünümü.
 )
 
 # ==================================================
@@ -74,19 +74,19 @@ firebase_config = {
 
 }
 
-firebase = pyrebase.initialize_app(
+firebase = pyrebase.initialize_app( # Firebase başlatılır.
     firebase_config
 )
 
-auth = firebase.auth()
+auth = firebase.auth() # Login sistemi.
 
 # ==================================================
 # FIREBASE ADMIN
 # ==================================================
 
-if not firebase_admin._apps:
+if not firebase_admin._apps: #Firebase tekrar tekrar initialize olmasın diye kontrol.
 
-    cred = credentials.Certificate({
+    cred = credentials.Certificate({ # Firebase service account bilgileri.
 
         "type":
         st.secrets["firebase_service_account"]["type"],
@@ -120,25 +120,25 @@ if not firebase_admin._apps:
 
     })
 
-    firebase_admin.initialize_app(cred)
+    firebase_admin.initialize_app(cred)  # Firestore aktif edilir.
 
-db = firestore.client()
+db = firestore.client() # Firestore bağlantısı.
 
 # ==================================================
 # SESSION STATE
 # ==================================================
 
-if "admin_logged_in" not in st.session_state:
+if "admin_logged_in" not in st.session_state: # Admin giriş durumunu saklar.
 
-    st.session_state.admin_logged_in = False
+    st.session_state.admin_logged_in = False # Başlangıçta admin çıkışta.
 
 # ==================================================
 # HUGGING FACE
 # ==================================================
 
-hf_token = st.secrets["hf_token"]
+hf_token = st.secrets["hf_token"] # HF token okunuyor.
 
-login(token=hf_token)
+login(token=hf_token) # HF hesabına giriş.
 
 api = HfApi()
 
@@ -146,15 +146,15 @@ api = HfApi()
 # ADMIN DATA FUNCTIONS
 # ==================================================
 
-def admin_data_yukle():
+def admin_data_yukle(): # Admin dataset yükleme fonksiyonu.
 
-    os.makedirs("data", exist_ok=True)
+    os.makedirs("data", exist_ok=True) # data klasörü yoksa oluşturur.
 
     file_path = "data/admin_data.csv"
 
-    if not os.path.exists(file_path):
+    if not os.path.exists(file_path): # CSV yoksa oluşturur.
 
-        df = pd.DataFrame({
+        df = pd.DataFrame({ # Boş dataset oluşturur.
 
             "text": [],
             "clean_text": [],
@@ -170,21 +170,21 @@ def admin_data_yukle():
 # HF UPDATE
 # ==================================================
 
-def upload_to_huggingface():
+def upload_to_huggingface(): # HF dataset güncelleme fonksiyonu.
 
     try:
 
-        api.create_repo(
+        api.create_repo( # Repo yoksa oluşturur.
 
-            repo_id="gulsunnciftci/fake-news-data",
+            repo_id="gulsunnciftci/fake-news-data", # HF dataset adı.
 
-            repo_type="dataset",
+            repo_type="dataset", # HF model değil dataset olduğunu belirtir.
 
             exist_ok=True
 
         )
 
-        api.upload_file(
+        api.upload_file( # CSV dosyasını HF'ye yükler.
 
             path_or_fileobj="data/admin_data.csv",
 
@@ -214,11 +214,11 @@ def hf_guncelle(file_path):
 # LOAD MODEL
 # ==================================================
 
-model = joblib.load(
+model = joblib.load( # Eğitilmiş modeli yükler.
     "models/fake_news_model.pkl"
 )
 
-vectorizer = joblib.load(
+vectorizer = joblib.load( # TF-IDF vectorizer yüklenir.
     "models/tfidf_vectorizer.pkl"
 )
 
@@ -353,18 +353,18 @@ def lemmatize_text(text):
 # URL EXTRACTION
 # ==================================================
 
-def extract_news_from_url(url):
+def extract_news_from_url(url): #Haber sitesinden metin çeker.
 
     try:
 
-        headers = {
+        headers = { # Bot engeli yememek için browser gibi davranır.
 
             "User-Agent":
             "Mozilla/5.0"
 
         }
 
-        response = requests.get(
+        response = requests.get( #Siteye istek atılır.
 
             url,
 
@@ -392,7 +392,7 @@ def extract_news_from_url(url):
 # OCR IMAGE
 # ==================================================
 
-def extract_text_from_image(image):
+def extract_text_from_image(image): #Resimdeki yazıları okur.
 
     result = reader.readtext(
 
